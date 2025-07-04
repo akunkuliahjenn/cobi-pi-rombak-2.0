@@ -21,11 +21,36 @@ try {
         $unit_custom = trim($_POST['unit_custom'] ?? '');
         $unit = ($unit_select === 'custom') ? $unit_custom : $unit_select;
         $stock = (int) ($_POST['stock'] ?? 0);
-        $sale_price = (float) ($_POST['sale_price'] ?? 0);
+
+        // Handle sale_price - remove any formatting
+        $sale_price_raw = $_POST['sale_price'] ?? 0;
+        if (is_string($sale_price_raw)) {
+            // Remove any currency formatting
+            $sale_price_raw = preg_replace('/[^0-9.]/', '', $sale_price_raw);
+        }
+        $sale_price = (float) $sale_price_raw;
 
         // Validasi dasar
-        if (empty($name) || empty($unit) || $stock < 0 || $sale_price < 0) {
-            $_SESSION['product_message'] = ['text' => 'Data produk tidak lengkap atau tidak valid.', 'type' => 'error'];
+        if (empty($name)) {
+            $_SESSION['product_message'] = ['text' => 'Nama produk harus diisi.', 'type' => 'error'];
+            header("Location: /cornerbites-sia/pages/produk.php");
+            exit();
+        }
+
+        if (empty($unit)) {
+            $_SESSION['product_message'] = ['text' => 'Satuan produk harus diisi.', 'type' => 'error'];
+            header("Location: /cornerbites-sia/pages/produk.php");
+            exit();
+        }
+
+        if ($stock < 0) {
+            $_SESSION['product_message'] = ['text' => 'Stok tidak boleh negatif.', 'type' => 'error'];
+            header("Location: /cornerbites-sia/pages/produk.php");
+            exit();
+        }
+
+        if ($sale_price < 0) {
+            $_SESSION['product_message'] = ['text' => 'Harga jual tidak boleh negatif.', 'type' => 'error'];
             header("Location: /cornerbites-sia/pages/produk.php");
             exit();
         }
