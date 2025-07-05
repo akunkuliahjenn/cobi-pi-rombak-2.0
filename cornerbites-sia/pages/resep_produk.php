@@ -1,3 +1,4 @@
+
 <?php
 // pages/resep_produk.php
 // Halaman untuk mengelola resep produk (komposisi bahan baku/kemasan untuk setiap produk jadi) dengan kalkulasi HPP
@@ -579,7 +580,7 @@ try {
 
                     <!-- Container Section untuk Input Items -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                        <!-- Container 1: Bahan Baku & Kemasan -->
+                        <!-- Container 1: Bahan Baku & Kemasan (Gabungan dengan Mode Edit) -->
                         <div class="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                             <div class="flex items-center mb-6">
                                 <div class="p-2 bg-blue-100 rounded-lg mr-3">
@@ -588,195 +589,333 @@ try {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 class="text-xl font-semibold text-gray-900">Bahan Baku & Kemasan</h3>
-                                    <p class="text-sm text-gray-600 mt-1">Tambahkan bahan baku atau kemasan yang digunakan dalam resep</p>
+                                    <h3 class="text-xl font-semibold text-gray-900" id="recipe-form-title">Bahan Baku & Kemasan</h3>
+                                    <p class="text-sm text-gray-600 mt-1" id="recipe-form-desc">Tambahkan bahan baku atau kemasan yang digunakan dalam resep</p>
                                 </div>
                             </div>
 
-                            <!-- Tab Navigation untuk Bahan/Kemasan -->
-                            <div class="border-b border-gray-200 mb-6">
-                                <nav class="-mb-px flex space-x-8">
-                                    <button onclick="showQuickActionTab('bahan')" id="quick-tab-bahan" class="py-2 px-1 border-b-2 font-medium text-sm border-blue-600 text-blue-600">
-                                        Bahan Baku
-                                    </button>
-                                    <button onclick="showQuickActionTab('kemasan')" id="quick-tab-kemasan" class="py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                                        Kemasan
-                                    </button>
-                                </nav>
-                            </div>
+                            <!-- Form Universal untuk Bahan & Kemasan -->
+                            <form action="../process/simpan_resep_produk.php" method="POST" id="recipe-main-form">
+                                <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($selectedProductId); ?>">
+                                <input type="hidden" name="action" value="add_bahan" id="recipe-action">
+                                <input type="hidden" name="recipe_id" value="" id="recipe-edit-id">
 
-                            <!-- Tab Content untuk Bahan -->
-                            <div id="quick-content-bahan">
-                                <form action="../process/simpan_resep_produk.php" method="POST">
-                                    <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($selectedProductId); ?>">
-                                    <input type="hidden" name="action" value="add_bahan">
+                                <!-- Tab Navigation untuk Bahan/Kemasan -->
+                                <div class="border-b border-gray-200 mb-6">
+                                    <nav class="-mb-px flex space-x-8">
+                                        <button type="button" onclick="switchRecipeTab('bahan')" id="tab-bahan" class="py-2 px-1 border-b-2 font-medium text-sm border-blue-600 text-blue-600">
+                                            Bahan Baku
+                                        </button>
+                                        <button type="button" onclick="switchRecipeTab('kemasan')" id="tab-kemasan" class="py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                                            Kemasan
+                                        </button>
+                                    </nav>
+                                </div>
 
-                                    <div class="space-y-4">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2" id="recipe-label">Pilih Bahan Baku</label>
+                                        <select name="raw_material_id" id="recipe-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                            <option value="">-- Pilih Bahan Baku --</option>
+                                            <?php foreach ($rawMaterialsAndPackaging as $item): ?>
+                                                <?php if ($item['type'] == 'bahan'): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" data-type="bahan">
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    </option>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                            <?php foreach ($rawMaterialsAndPackaging as $item): ?>
+                                                <?php if ($item['type'] == 'kemasan'): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" data-type="kemasan" style="display:none;">
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    </option>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Bahan Baku</label>
-                                            <select name="raw_material_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                                                <option value="">-- Pilih Bahan Baku --</option>
-                                                <?php foreach ($rawMaterialsAndPackaging as $item): ?>
-                                                    <?php if ($item['type'] == 'bahan'): ?>
-                                                        <option value="<?php echo htmlspecialchars($item['id']); ?>">
-                                                            <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
-                                                        </option>
-                                                    <?php endif; ?>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Jumlah</label>
+                                            <input type="number" step="0.001" name="quantity_used" id="recipe-quantity" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="250" required>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Satuan</label>
+                                            <select name="unit_measurement" id="recipe-unit" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                                <?php foreach ($recipeUnitOptions as $unit): ?>
+                                                    <option value="<?php echo htmlspecialchars($unit); ?>"><?php echo htmlspecialchars($unit); ?></option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
+                                    </div>
 
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Jumlah</label>
-                                                <input type="number" step="0.001" name="quantity_used" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="250" required>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Satuan</label>
-                                                <select name="unit_measurement" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                                                    <?php foreach ($recipeUnitOptions as $unit): ?>
-                                                        <option value="<?php echo htmlspecialchars($unit); ?>"><?php echo htmlspecialchars($unit); ?></option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <div class="flex gap-3">
+                                        <button type="submit" id="recipe-submit-btn" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                             <svg class="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                                             </svg>
-                                            Tambah Bahan Baku
+                                            <span id="recipe-submit-text">Tambah Bahan Baku</span>
+                                        </button>
+                                        <button type="button" onclick="resetRecipeForm()" id="recipe-cancel-btn" class="hidden bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                                            Batal
                                         </button>
                                     </div>
-                                </form>
-                            </div>
-
-                            <!-- Tab Content untuk Kemasan -->
-                            <div id="quick-content-kemasan" class="hidden">
-                                <form action="../process/simpan_resep_produk.php" method="POST">
-                                    <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($selectedProductId); ?>">
-                                    <input type="hidden" name="action" value="add_kemasan">
-
-                                    <div class="space-y-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Kemasan</label>
-                                            <select name="raw_material_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" required>
-                                                <option value="">-- Pilih Kemasan --</option>
-                                                <?php foreach ($rawMaterialsAndPackaging as $item): ?>
-                                                    <?php if ($item['type'] == 'kemasan'): ?>
-                                                        <option value="<?php echo htmlspecialchars($item['id']); ?>">
-                                                            <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
-                                                        </option>
-                                                    <?php endif; ?>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Jumlah</label>
-                                                <input type="number" step="0.001" name="quantity_used" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="1" required>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Satuan</label>
-                                                <select name="unit_measurement" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" required>
-                                                    <?php foreach ($recipeUnitOptions as $unit): ?>
-                                                        <option value="<?php echo htmlspecialchars($unit); ?>"><?php echo htmlspecialchars($unit); ?></option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <button type="submit" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-                                            <svg class="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                                            </svg>
-                                            Tambah Kemasan
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
+                                </div>
+                            </form>
                         </div>
 
-                        <!-- Container 2: Overhead & Tenaga Kerja -->
+                        <!-- Container 2: Overhead & Tenaga Kerja Manual -->
                         <div class="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                             <div class="flex items-center mb-6">
                                 <div class="p-2 bg-purple-100 rounded-lg mr-3">
                                     <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 class="text-xl font-semibold text-gray-900">Overhead & Tenaga Kerja</h3>
-                                    <p class="text-sm text-gray-600 mt-1">Kelola biaya overhead dan tenaga kerja manual</p>
+                                    <h3 class="text-xl font-semibold text-gray-900">Input Manual Overhead & Tenaga Kerja</h3>
+                                    <p class="text-sm text-gray-600 mt-1">Pilih overhead/tenaga kerja spesifik untuk resep ini</p>
                                 </div>
                             </div>
 
                             <!-- Tab Navigation untuk Overhead/Tenaga Kerja -->
                             <div class="border-b border-gray-200 mb-6">
                                 <nav class="-mb-px flex space-x-8">
-                                    <button onclick="showQuickActionTab('overhead')" id="quick-tab-overhead" class="py-2 px-1 border-b-2 font-medium text-sm border-purple-600 text-purple-600">
+                                    <button type="button" onclick="switchManualTab('overhead')" id="manual-tab-overhead" class="py-2 px-1 border-b-2 font-medium text-sm border-purple-600 text-purple-600">
                                         Overhead
                                     </button>
-                                    <button onclick="showQuickActionTab('tenaga_kerja')" id="quick-tab-tenaga_kerja" class="py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                                    <button type="button" onclick="switchManualTab('labor')" id="manual-tab-labor" class="py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
                                         Tenaga Kerja
                                     </button>
                                 </nav>
                             </div>
 
-                            <!-- Tab Content untuk Overhead -->
-                            <div id="quick-content-overhead">
-                                <div class="space-y-4">
-                                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                                        <h4 class="font-medium text-purple-800 mb-2 flex items-center">
-                                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                            </svg>
-                                            Informasi Overhead
-                                        </h4>
-                                        <p class="text-sm text-purple-700">
-                                            Biaya overhead dihitung otomatis berdasarkan data yang telah diatur di halaman manajemen overhead. 
-                                            Kalkulasi akan muncul di breakdown HPP di atas.
-                                        </p>
-                                    </div>
-                                    <div class="text-center">
-                                        <a href="overhead_management.php" class="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                            </svg>
-                                            Kelola Data Overhead
-                                        </a>
+                            <!-- Form Manual Input -->
+                            <form action="../process/simpan_resep_produk.php" method="POST" id="manual-cost-form">
+                                <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($selectedProductId); ?>">
+                                <input type="hidden" name="action" value="add_manual_overhead" id="manual-action">
+
+                                <!-- Content Overhead -->
+                                <div id="manual-content-overhead">
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Overhead yang Akan Ditambahkan</label>
+                                            <select name="overhead_id" id="manual-overhead-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                                <option value="">-- Pilih Overhead --</option>
+                                                <?php
+                                                try {
+                                                    $stmtOverhead = $conn->prepare("SELECT id, name, amount, allocation_method FROM overhead_costs WHERE is_active = 1 ORDER BY name ASC");
+                                                    $stmtOverhead->execute();
+                                                    $overheadList = $stmtOverhead->fetchAll(PDO::FETCH_ASSOC);
+                                                    foreach ($overheadList as $overhead): ?>
+                                                        <option value="<?php echo htmlspecialchars($overhead['id']); ?>" 
+                                                                data-amount="<?php echo htmlspecialchars($overhead['amount']); ?>"
+                                                                data-method="<?php echo htmlspecialchars($overhead['allocation_method']); ?>">
+                                                            <?php echo htmlspecialchars($overhead['name']); ?> - 
+                                                            Rp <?php echo number_format($overhead['amount'], 0, ',', '.'); ?>
+                                                            (<?php echo $overhead['allocation_method'] == 'percentage' ? '%' : ($overhead['allocation_method'] == 'per_hour' ? '/jam' : '/unit'); ?>)
+                                                        </option>
+                                                    <?php endforeach;
+                                                } catch (Exception $e) {
+                                                    echo '<option value="">Tidak ada data overhead</option>';
+                                                }
+                                                ?>
+                                            </select>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Nilai Custom (Opsional)</label>
+                                                <input type="number" step="0.01" name="custom_amount" id="manual-custom-amount" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Kosongkan untuk nilai default">
+                                                <p class="text-xs text-gray-500 mt-1">Override nilai default overhead</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Multiplier</label>
+                                                <input type="number" step="0.1" name="multiplier" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" min="0.1">
+                                                <p class="text-xs text-gray-500 mt-1">Kalikan dengan faktor ini</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <!-- Tab Content untuk Tenaga Kerja -->
-                            <div id="quick-content-tenaga_kerja" class="hidden">
-                                <div class="space-y-4">
-                                    <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                                        <h4 class="font-medium text-orange-800 mb-2 flex items-center">
-                                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                            </svg>
-                                            Informasi Tenaga Kerja
-                                        </h4>
-                                        <p class="text-sm text-orange-700">
-                                            Biaya tenaga kerja dihitung otomatis berdasarkan upah per jam dan waktu produksi yang telah diatur. 
-                                            Kalkulasi akan muncul di breakdown HPP di atas.
-                                        </p>
+                                <!-- Content Tenaga Kerja -->
+                                <div id="manual-content-labor" class="hidden">
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Posisi Tenaga Kerja</label>
+                                            <select name="labor_id" id="manual-labor-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                                <option value="">-- Pilih Posisi --</option>
+                                                <?php
+                                                try {
+                                                    $stmtLabor = $conn->prepare("SELECT id, position_name, hourly_rate FROM labor_costs WHERE is_active = 1 ORDER BY position_name ASC");
+                                                    $stmtLabor->execute();
+                                                    $laborList = $stmtLabor->fetchAll(PDO::FETCH_ASSOC);
+                                                    foreach ($laborList as $labor): ?>
+                                                        <option value="<?php echo htmlspecialchars($labor['id']); ?>"
+                                                                data-rate="<?php echo htmlspecialchars($labor['hourly_rate']); ?>">
+                                                            <?php echo htmlspecialchars($labor['position_name']); ?> - 
+                                                            Rp <?php echo number_format($labor['hourly_rate'], 0, ',', '.'); ?>/jam
+                                                        </option>
+                                                    <?php endforeach;
+                                                } catch (Exception $e) {
+                                                    echo '<option value="">Tidak ada data tenaga kerja</option>';
+                                                }
+                                                ?>
+                                            </select>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Jam Kerja</label>
+                                                <input type="number" step="0.1" name="custom_hours" id="manual-hours" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="<?php echo $selectedProduct['production_time_hours'] ?? 1; ?>">
+                                                <p class="text-xs text-gray-500 mt-1">Default: <?php echo $selectedProduct['production_time_hours'] ?? 1; ?> jam (estimasi produk)</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Upah Custom/Jam</label>
+                                                <input type="number" step="1000" name="custom_hourly_rate" id="manual-rate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Kosongkan untuk rate default">
+                                                <p class="text-xs text-gray-500 mt-1">Override upah default</p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="text-center">
-                                        <a href="overhead_management.php" class="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500">
-                                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                            </svg>
-                                            Kelola Data Tenaga Kerja
-                                        </a>
+                                </div>
+
+                                <button type="submit" id="manual-submit-btn" class="w-full mt-6 bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-200">
+                                    <svg class="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                    </svg>
+                                    <span id="manual-submit-text">Tambah Overhead ke Resep</span>
+                                </button>
+                            </form>
+
+                            <!-- Info Box -->
+                            <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div class="flex">
+                                    <svg class="w-5 h-5 text-blue-400 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div>
+                                        <h4 class="text-sm font-medium text-blue-800">Catatan Penting</h4>
+                                        <p class="text-xs text-blue-700 mt-1">Item yang ditambahkan di sini akan masuk ke breakdown kalkulasi HPP. Anda bisa memilih overhead/tenaga kerja mana saja yang spesifik untuk produk ini.</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Form Edit Resep -->
+                    <div id="edit-resep-form-section" class="bg-white rounded-xl shadow-lg border border-gray-100 p-6 mb-8" style="display: none;">
+                        <div class="flex items-center mb-6">
+                            <div class="p-2 bg-indigo-100 rounded-lg mr-3">
+                                <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold text-gray-900" id="edit-form-title">Edit Item Resep</h3>
+                                <p class="text-sm text-gray-600 mt-1">Edit komposisi bahan dalam resep produk</p>
+                            </div>
+                        </div>
+
+                        <form action="../process/simpan_resep_produk.php" method="POST">
+                            <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($selectedProductId); ?>">
+                            <input type="hidden" name="action" value="edit">
+                            <input type="hidden" name="recipe_id" id="edit_recipe_id">
+
+                            <!-- Tab Navigation untuk Edit -->
+                            <div class="border-b border-gray-200 mb-6">
+                                <nav class="-mb-px flex space-x-8">
+                                    <button type="button" onclick="showEditCategoryTab('bahan')" id="edit-tab-bahan" class="py-2 px-1 border-b-2 font-medium text-sm border-blue-600 text-blue-600">
+                                        Bahan Baku
+                                    </button>
+                                    <button type="button" onclick="showEditCategoryTab('kemasan')" id="edit-tab-kemasan" class="py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                                        Kemasan
+                                    </button>
+                                </nav>
+                            </div>
+
+                            <!-- Tab Content untuk Edit Bahan -->
+                            <div id="edit-content-bahan">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Bahan Baku</label>
+                                        <select name="raw_material_id" id="edit_raw_material_id_bahan" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                            <option value="">-- Pilih Bahan Baku --</option>
+                                            <?php foreach ($rawMaterialsAndPackaging as $item): ?>
+                                                <?php if ($item['type'] == 'bahan'): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>">
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    </option>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Jumlah</label>
+                                            <input type="number" step="0.001" name="quantity_used" id="edit_quantity_used" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="250" required>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Satuan</label>
+                                            <select name="unit_measurement" id="edit_unit_measurement" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                                <?php foreach ($recipeUnitOptions as $unit): ?>
+                                                    <option value="<?php echo htmlspecialchars($unit); ?>"><?php echo htmlspecialchars($unit); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Content untuk Edit Kemasan -->
+                            <div id="edit-content-kemasan" class="hidden">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Kemasan</label>
+                                        <select name="raw_material_id" id="edit_raw_material_id_kemasan" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" required disabled>
+                                            <option value="">-- Pilih Kemasan --</option>
+                                            <?php foreach ($rawMaterialsAndPackaging as $item): ?>
+                                                <?php if ($item['type'] == 'kemasan'): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>">
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    </option>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Jumlah</label>
+                                            <input type="number" step="0.001" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="1" disabled>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Satuan</label>
+                                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" disabled>
+                                                <?php foreach ($recipeUnitOptions as $unit): ?>
+                                                    <option value="<?php echo htmlspecialchars($unit); ?>"><?php echo htmlspecialchars($unit); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between mt-8">
+                                <button type="submit" id="edit_submit_button" class="flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Update Item Resep
+                                </button>
+                                <button type="button" onclick="hideEditForm()" class="flex items-center px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ml-4">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                    Batal Edit
+                                </button>
+                            </div>
+                        </form>
                     </div>
 
                     <!-- Bagian Daftar Resep Produk -->
@@ -861,7 +1000,7 @@ try {
                                                 <?php endif; ?>
                                             </div>
                                             <div class="flex items-center space-x-2">
-                                                <button onclick="editResepItem(<?php echo htmlspecialchars(json_encode($item)); ?>)" class="inline-flex items-center px-3 py-1 border border-indigo-300 text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200">
+                                                <button onclick="editRecipeItem(<?php echo htmlspecialchars(json_encode($item)); ?>)" class="inline-flex items-center px-3 py-1 border border-indigo-300 text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200">
                                                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                                     </svg>
@@ -963,6 +1102,59 @@ try {
     </div>
 </div>
 
+<!-- Modal untuk Edit Resep -->
+<div id="editResepModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Edit Item Resep</h3>
+            <form id="editResepForm" action="../process/simpan_resep_produk.php" method="POST">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="recipe_id" id="edit_recipe_id">
+                <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($selectedProductId); ?>">
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Bahan/Kemasan</label>
+                        <select name="raw_material_id" id="edit_raw_material_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                            <option value="">-- Pilih Bahan/Kemasan --</option>
+                            <?php foreach ($rawMaterialsAndPackaging as $item): ?>
+                                <option value="<?php echo htmlspecialchars($item['id']); ?>">
+                                    <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                    (<?php echo ucfirst($item['type']); ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Jumlah</label>
+                            <input type="number" step="0.001" name="quantity_used" id="edit_quantity_used" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Satuan</label>
+                            <select name="unit_measurement" id="edit_unit_measurement" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                <?php foreach ($recipeUnitOptions as $unit): ?>
+                                    <option value="<?php echo htmlspecialchars($unit); ?>"><?php echo htmlspecialchars($unit); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end mt-6 space-x-3">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        Update
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script src="/cornerbites-sia/assets/js/resep_produk.js"></script>
 <script>
 function showBreakdownTab(tabName) {
@@ -985,6 +1177,102 @@ function showBreakdownTab(tabName) {
     // Activate the selected tab
     document.getElementById('tab-' + tabName).classList.add('bg-blue-50', 'border-blue-600', 'text-blue-600');
     document.getElementById('tab-' + tabName).classList.remove('text-gray-500', 'hover:text-gray-700');
+}
+
+function showQuickActionTab(tabName) {
+    // Hide all quick action tab contents
+    const contents = ['bahan', 'kemasan', 'overhead', 'tenaga_kerja'];
+    contents.forEach(content => {
+        const element = document.getElementById('quick-content-' + content);
+        if (element) {
+            element.classList.add('hidden');
+        }
+    });
+
+    // Show the selected tab content
+    const selectedContent = document.getElementById('quick-content-' + tabName);
+    if (selectedContent) {
+        selectedContent.classList.remove('hidden');
+    }
+
+    // Update tab buttons styling
+    contents.forEach(content => {
+        const tabButton = document.getElementById('quick-tab-' + content);
+        if (tabButton) {
+            tabButton.classList.remove('border-blue-600', 'text-blue-600', 'border-green-600', 'text-green-600', 'border-purple-600', 'text-purple-600', 'border-orange-600', 'text-orange-600');
+            tabButton.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+        }
+    });
+
+    // Activate the selected tab
+    const activeTab = document.getElementById('quick-tab-' + tabName);
+    if (activeTab) {
+        activeTab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+        
+        // Set appropriate color based on tab
+        if (tabName === 'bahan') {
+            activeTab.classList.add('border-blue-600', 'text-blue-600');
+        } else if (tabName === 'kemasan') {
+            activeTab.classList.add('border-green-600', 'text-green-600');
+        } else if (tabName === 'overhead') {
+            activeTab.classList.add('border-purple-600', 'text-purple-600');
+        } else if (tabName === 'tenaga_kerja') {
+            activeTab.classList.add('border-orange-600', 'text-orange-600');
+        }
+    }
+}
+
+function editResepItem(item) {
+    document.getElementById('edit_recipe_id').value = item.id;
+    document.getElementById('edit_raw_material_id').value = item.raw_material_id;
+    document.getElementById('edit_quantity_used').value = item.quantity_used;
+    document.getElementById('edit_unit_measurement').value = item.unit_measurement;
+    
+    document.getElementById('editResepModal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+    document.getElementById('editResepModal').classList.add('hidden');
+}
+
+// Search functionality
+document.getElementById('search_recipe').addEventListener('input', function() {
+    const searchValue = this.value;
+    const currentParams = new URLSearchParams(window.location.search);
+    
+    if (searchValue) {
+        currentParams.set('search_recipe', searchValue);
+    } else {
+        currentParams.delete('search_recipe');
+    }
+    
+    currentParams.delete('recipe_page'); // Reset to first page
+    
+    const newUrl = window.location.pathname + '?' + currentParams.toString();
+    setTimeout(() => {
+        window.location.href = newUrl;
+    }, 500);
+});
+
+// Limit functionality
+document.getElementById('recipe_limit').addEventListener('change', function() {
+    const limitValue = this.value;
+    const currentParams = new URLSearchParams(window.location.search);
+    
+    currentParams.set('recipe_limit', limitValue);
+    currentParams.delete('recipe_page'); // Reset to first page
+    
+    const newUrl = window.location.pathname + '?' + currentParams.toString();
+    window.location.href = newUrl;
+});
+
+// Format rupiah function
+function formatRupiah(input, hiddenInput) {
+    let value = input.value.replace(/\D/g, '');
+    let formattedValue = value.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+    input.value = formattedValue;
+    document.getElementById(hiddenInput).value = value;
 }
 </script>
 

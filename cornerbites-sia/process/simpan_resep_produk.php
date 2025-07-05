@@ -1,4 +1,3 @@
-
 <?php
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
@@ -57,6 +56,115 @@ try {
 
                 $_SESSION['resep_message'] = [
                     'text' => 'Item resep berhasil diupdate',
+                    'type' => 'success'
+                ];
+                break;
+
+            case 'add_manual_overhead':
+                $overhead_id = $_POST['overhead_id'] ?? null;
+                $custom_amount = $_POST['custom_amount'] ?? null;
+                $multiplier = $_POST['multiplier'] ?? 1;
+
+                if (!$overhead_id) {
+                    throw new Exception('Overhead tidak dipilih');
+                }
+
+                // Check if already exists
+                $checkStmt = $conn->prepare("SELECT id FROM product_overhead_manual WHERE product_id = ? AND overhead_id = ?");
+                $checkStmt->execute([$product_id, $overhead_id]);
+                
+                if ($checkStmt->fetch()) {
+                    throw new Exception('Overhead ini sudah ditambahkan ke resep produk ini');
+                }
+
+                // Get overhead data
+                $stmtOverhead = $conn->prepare("SELECT * FROM overhead_costs WHERE id = ? AND is_active = 1");
+                $stmtOverhead->execute([$overhead_id]);
+                $overhead = $stmtOverhead->fetch(PDO::FETCH_ASSOC);
+
+                if (!$overhead) {
+                    throw new Exception('Data overhead tidak ditemukan');
+                }
+
+                // Use custom amount if provided, otherwise use default
+                $amount = $custom_amount ? $custom_amount : $overhead['amount'];
+                $final_amount = $amount * $multiplier;
+
+                // Create table if not exists
+                $conn->exec("CREATE TABLE IF NOT EXISTS product_overhead_manual (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_id INTEGER NOT NULL,
+                    overhead_id INTEGER NOT NULL,
+                    custom_amount DECIMAL(15,2),
+                    multiplier DECIMAL(5,2) DEFAULT 1,
+                    final_amount DECIMAL(15,2),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (product_id) REFERENCES products(id),
+                    FOREIGN KEY (overhead_id) REFERENCES overhead_costs(id)
+                )");
+
+                $stmt = $conn->prepare("INSERT INTO product_overhead_manual (product_id, overhead_id, custom_amount, multiplier, final_amount) VALUES (?, ?, ?, ?, ?)");
+                $stmt->execute([$product_id, $overhead_id, $amount, $multiplier, $final_amount]);
+
+                $_SESSION['resep_message'] = [
+                    'text' => 'Overhead manual berhasil ditambahkan ke resep',
+                    'type' => 'success'
+                ];
+                break;
+
+            case 'add_manual_labor':
+                $labor_id = $_POST['labor_id'] ?? null;
+                $custom_hours = $_POST['custom_hours'] ?? null;
+                $custom_hourly_rate = $_POST['custom_hourly_rate'] ?? null;
+
+                if (!$labor_id) {
+                    throw new Exception('Tenaga kerja tidak dipilih');
+                }
+
+                // Check if already exists
+                $checkStmt = $conn->prepare("SELECT id FROM product_labor_manual WHERE product_id = ? AND labor_id = ?");
+                $checkStmt->execute([$product_id, $labor_id]);
+                
+                if ($checkStmt->fetch()) {
+                    throw new Exception('Posisi tenaga kerja ini sudah ditambahkan ke resep produk ini');
+                }
+
+                // Get labor data
+                $stmtLabor = $conn->prepare("SELECT * FROM labor_costs WHERE id = ? AND is_active = 1");
+                $stmtLabor->execute([$labor_id]);
+                $labor = $stmtLabor->fetch(PDO::FETCH_ASSOC);
+
+                if (!$labor) {
+                    throw new Exception('Data tenaga kerja tidak ditemukan');
+                }
+
+                // Get product time if custom hours not provided
+                $stmtProduct = $conn->prepare("SELECT production_time_hours FROM products WHERE id = ?");
+                $stmtProduct->execute([$product_id]);
+                $product = $stmtProduct->fetch(PDO::FETCH_ASSOC);
+
+                $hours = $custom_hours ? $custom_hours : ($product['production_time_hours'] ?? 1);
+                $hourly_rate = $custom_hourly_rate ? $custom_hourly_rate : $labor['hourly_rate'];
+                $total_cost = $hours * $hourly_rate;
+
+                // Create table if not exists
+                $conn->exec("CREATE TABLE IF NOT EXISTS product_labor_manual (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_id INTEGER NOT NULL,
+                    labor_id INTEGER NOT NULL,
+                    custom_hours DECIMAL(5,2),
+                    custom_hourly_rate DECIMAL(10,2),
+                    total_cost DECIMAL(15,2),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (product_id) REFERENCES products(id),
+                    FOREIGN KEY (labor_id) REFERENCES labor_costs(id)
+                )");
+
+                $stmt = $conn->prepare("INSERT INTO product_labor_manual (product_id, labor_id, custom_hours, custom_hourly_rate, total_cost) VALUES (?, ?, ?, ?, ?)");
+                $stmt->execute([$product_id, $labor_id, $hours, $hourly_rate, $total_cost]);
+
+                $_SESSION['resep_message'] = [
+                    'text' => 'Tenaga kerja manual berhasil ditambahkan ke resep',
                     'type' => 'success'
                 ];
                 break;
