@@ -262,6 +262,21 @@ function validateRecipeForm() {
     return true;
 }
 
+// Validate stock before submitting recipe form
+function validateRecipeStock(formElement) {
+    const formData = new FormData(formElement);
+    const materialId = formData.get('raw_material_id');
+    const quantityUsed = parseFloat(formData.get('quantity_used'));
+
+    if (!materialId || !quantityUsed) {
+        return true; // Let server handle validation
+    }
+
+    // This would ideally make an AJAX call to check stock
+    // For now, we'll rely on server-side validation
+    return true;
+}
+
 function updateRecipeResults() {
     const searchValue = document.getElementById('search_recipe').value;
     const limitValue = document.getElementById('recipe_limit').value;
@@ -424,6 +439,11 @@ function switchRecipeTab(type) {
     const action = document.getElementById('recipe-action');
     const submitText = document.getElementById('recipe-submit-text');
     const submitBtn = document.getElementById('recipe-submit-btn');
+    const editId = document.getElementById('recipe-edit-id');
+
+    // Check if we're in edit mode
+    const isEditMode = editId && editId.value !== '';
+    const currentSelectValue = select.value; // Preserve current selection
 
     // Reset tab styles
     bahanTab.className = 'py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300';
@@ -440,9 +460,12 @@ function switchRecipeTab(type) {
     if (type === 'bahan') {
         bahanTab.className = 'py-2 px-1 border-b-2 font-medium text-sm border-blue-600 text-blue-600';
         label.textContent = 'Pilih Bahan Baku';
-        action.value = 'add_bahan';
-        submitText.textContent = 'Tambah Bahan Baku';
-        submitBtn.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
+        
+        if (!isEditMode) {
+            action.value = 'add_bahan';
+            submitText.textContent = 'Tambah Bahan Baku';
+            submitBtn.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
+        }
 
         // Show only bahan options
         options.forEach(option => {
@@ -455,9 +478,12 @@ function switchRecipeTab(type) {
     } else {
         kemasanTab.className = 'py-2 px-1 border-b-2 font-medium text-sm border-green-600 text-green-600';
         label.textContent = 'Pilih Kemasan';
-        action.value = 'add_kemasan';
-        submitText.textContent = 'Tambah Kemasan';
-        submitBtn.className = 'flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500';
+        
+        if (!isEditMode) {
+            action.value = 'add_kemasan';
+            submitText.textContent = 'Tambah Kemasan';
+            submitBtn.className = 'flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500';
+        }
 
         // Show only kemasan options
         options.forEach(option => {
@@ -469,7 +495,12 @@ function switchRecipeTab(type) {
         select.querySelector('option[value=""]').textContent = '-- Pilih Kemasan --';
     }
 
-    select.value = '';
+    // Restore selection if we had one (especially important for edit mode)
+    if (currentSelectValue) {
+        select.value = currentSelectValue;
+    } else if (!isEditMode) {
+        select.value = '';
+    }
 }
 
 // Switch tab untuk form manual (overhead/labor)
@@ -519,7 +550,7 @@ function deleteManualOverhead(overheadManualId) {
 
         const productIdInput = document.createElement('input');
         productIdInput.type = 'hidden';
-        actionInput.name = 'product_id';
+        productIdInput.name = 'product_id';
         productIdInput.value = new URLSearchParams(window.location.search).get('product_id');
 
         const overheadIdInput = document.createElement('input');
@@ -550,12 +581,12 @@ function deleteManualLabor(laborManualId) {
 
         const productIdInput = document.createElement('input');
         productIdInput.type = 'hidden';
-        actionInput.name = 'product_id';
+        productIdInput.name = 'product_id';
         productIdInput.value = new URLSearchParams(window.location.search).get('product_id');
 
         const laborIdInput = document.createElement('input');
         laborIdInput.type = 'hidden';
-        actionInput.name = 'labor_manual_id';
+        laborIdInput.name = 'labor_manual_id';
         laborIdInput.value = laborManualId;
 
         form.appendChild(actionInput);
@@ -569,6 +600,8 @@ function deleteManualLabor(laborManualId) {
 
 // Edit recipe item
 function editRecipeItem(item) {
+    console.log('Editing item:', item); // Debug log
+    
     const form = document.getElementById('recipe-main-form');
     const title = document.getElementById('recipe-form-title');
     const desc = document.getElementById('recipe-form-desc');
@@ -583,34 +616,39 @@ function editRecipeItem(item) {
 
     // Set edit mode
     editId.value = item.id;
-    quantity.value = item.quantity_used;
-    unit.value = item.unit_measurement;
     action.value = 'edit';
 
-    // Switch to appropriate tab
+    // Format quantity to remove unnecessary zeros
+    const formattedQuantity = parseFloat(item.quantity_used).toString();
+    quantity.value = formattedQuantity;
+    unit.value = item.unit_measurement;
+
+    // Switch to appropriate tab and set the select value
     if (item.raw_material_type === 'bahan') {
         switchRecipeTab('bahan');
         title.textContent = 'Edit Bahan Baku';
         desc.textContent = 'Update komposisi bahan baku dalam resep';
         submitText.textContent = 'Update Bahan Baku';
+        submitBtn.className = 'flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500';
     } else {
         switchRecipeTab('kemasan');
         title.textContent = 'Edit Kemasan';
         desc.textContent = 'Update komposisi kemasan dalam resep';
         submitText.textContent = 'Update Kemasan';
+        submitBtn.className = 'flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500';
     }
 
-    select.value = item.raw_material_id;
+    // Set the select value after switching tabs
+    setTimeout(() => {
+        select.value = item.raw_material_id;
+        console.log('Set select value to:', item.raw_material_id); // Debug log
+    }, 100);
 
     // Show cancel button
     cancelBtn.classList.remove('hidden');
 
     // Scroll to form
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    // Format quantity to remove unnecessary zeros
-    const formattedQuantity = parseFloat(item.quantity_used).toString();
-    quantity.value = formattedQuantity;
 }
 
 // Reset form
@@ -623,6 +661,8 @@ function resetRecipeForm() {
     const quantity = document.getElementById('recipe-quantity');
     const unit = document.getElementById('recipe-unit');
     const action = document.getElementById('recipe-action');
+    const submitText = document.getElementById('recipe-submit-text');
+    const submitBtn = document.getElementById('recipe-submit-btn');
     const cancelBtn = document.getElementById('recipe-cancel-btn');
 
     // Reset form
@@ -635,9 +675,11 @@ function resetRecipeForm() {
     // Reset to bahan tab
     switchRecipeTab('bahan');
 
-    // Reset title
+    // Reset title and button
     title.textContent = 'Bahan Baku & Kemasan';
     desc.textContent = 'Tambahkan bahan baku atau kemasan yang digunakan dalam resep';
+    submitText.textContent = 'Tambah Bahan Baku';
+    submitBtn.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
 
     // Hide cancel button
     cancelBtn.classList.add('hidden');
@@ -819,3 +861,63 @@ searchTimeoutRecipe = setTimeout(function() {
 
     console.log('Resep Produk page loaded');
 });
+
+function deleteManualLabor(laborManualId) {
+    if (confirm('Apakah Anda yakin ingin menghapus tenaga kerja ini dari resep?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '../process/simpan_resep_produk.php';
+
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'delete_manual_labor';
+
+        const productIdInput = document.createElement('input');
+        productIdInput.type = 'hidden';
+        productIdInput.name = 'product_id';
+        productIdInput.value = new URLSearchParams(window.location.search).get('product_id');
+
+        const laborIdInput = document.createElement('input');
+        laborIdInput.type = 'hidden';
+        laborIdInput.name = 'labor_manual_id';
+        laborIdInput.value = laborManualId;
+
+        form.appendChild(actionInput);
+        form.appendChild(productIdInput);
+        form.appendChild(laborIdInput);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function deleteManualOverhead(overheadManualId) {
+    if (confirm('Apakah Anda yakin ingin menghapus overhead ini dari resep?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '../process/simpan_resep_produk.php';
+
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'delete_manual_overhead';
+
+        const productIdInput = document.createElement('input');
+        productIdInput.type = 'hidden';
+        productIdInput.name = 'product_id';
+        productIdInput.value = new URLSearchParams(window.location.search).get('product_id');
+
+        const overheadIdInput = document.createElement('input');
+        overheadIdInput.type = 'hidden';
+        overheadIdInput.name = 'overhead_manual_id';
+        overheadIdInput.value = overheadManualId;
+
+        form.appendChild(actionInput);
+        form.appendChild(productIdInput);
+        form.appendChild(overheadIdInput);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+}

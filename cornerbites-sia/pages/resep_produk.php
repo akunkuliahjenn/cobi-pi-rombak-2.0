@@ -43,8 +43,17 @@ try {
     $stmtProducts->execute();
     $products = $stmtProducts->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ambil semua bahan baku dan kemasan untuk dropdown resep dengan error handling
-    $stmtRawMaterials = $conn->prepare("SELECT id, name, unit, type, COALESCE(brand, '') as brand FROM raw_materials ORDER BY name ASC");
+    // Ambil semua bahan baku dan kemasan dengan informasi stok terakhir
+    $stmtRawMaterials = $conn->prepare("
+        SELECT rm.id, rm.name, rm.unit, rm.type, COALESCE(rm.brand, '') as brand, 
+               rm.current_stock,
+               COALESCE(SUM(pr.quantity_used), 0) as total_used,
+               (rm.current_stock - COALESCE(SUM(pr.quantity_used), 0)) as stok_terakhir
+        FROM raw_materials rm
+        LEFT JOIN product_recipes pr ON rm.id = pr.raw_material_id
+        GROUP BY rm.id
+        ORDER BY rm.name ASC
+    ");
     $stmtRawMaterials->execute();
     $rawMaterialsAndPackaging = $stmtRawMaterials->fetchAll(PDO::FETCH_ASSOC);
 
@@ -429,8 +438,7 @@ try {
                                     <div class="flex items-center">
                                         <div class="p-2 bg-indigo-100 rounded-lg mr-3">
                                             <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                                            </svg>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path                                            </svg>
                                         </div>
                                         <div>
                                             <h3 class="text-xs font-bold text-indigo-800 mb-1">HPP per Unit</h3>
@@ -643,15 +651,39 @@ try {
                                             <option value="">-- Pilih Bahan Baku --</option>
                                             <?php foreach ($rawMaterialsAndPackaging as $item): ?>
                                                 <?php if ($item['type'] == 'bahan'): ?>
-                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" data-type="bahan">
-                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    <?php 
+                                                        $stokTerakhir = $item['stok_terakhir'];
+                                                        $isDisabled = $stokTerakhir <= 0;
+                                                        $stockLabel = '';
+                                                        if ($stokTerakhir <= 0) {
+                                                            $stockLabel = ' [STOK HABIS]';
+                                                        } elseif ($stokTerakhir <= 5) {
+                                                            $stockLabel = ' [STOK RENDAH: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        } else {
+                                                            $stockLabel = ' [Stok: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        }
+                                                    ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" data-type="bahan" <?php echo $isDisabled ? 'disabled' : ''; ?>>
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?><?php echo $stockLabel; ?>
                                                     </option>
                                                 <?php endif; ?>
                                             <?php endforeach; ?>
                                             <?php foreach ($rawMaterialsAndPackaging as $item): ?>
                                                 <?php if ($item['type'] == 'kemasan'): ?>
-                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" data-type="kemasan" style="display:none;">
-                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    <?php 
+                                                        $stokTerakhir = $item['stok_terakhir'];
+                                                        $isDisabled = $stokTerakhir <= 0;
+                                                        $stockLabel = '';
+                                                        if ($stokTerakhir <= 0) {
+                                                            $stockLabel = ' [STOK HABIS]';
+                                                        } elseif ($stokTerakhir <= 5) {
+                                                            $stockLabel = ' [STOK RENDAH: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        } else {
+                                                            $stockLabel = ' [Stok: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        }
+                                                    ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" data-type="kemasan" style="display:none;" <?php echo $isDisabled ? 'disabled' : ''; ?>>
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?><?php echo $stockLabel; ?>
                                                     </option>
                                                 <?php endif; ?>
                                             <?php endforeach; ?>
@@ -776,8 +808,7 @@ try {
                                                 $laborList = $stmtLabor->fetchAll(PDO::FETCH_ASSOC);
                                                 foreach ($laborList as $labor): ?>
                                                     <option value="<?php echo htmlspecialchars($labor['id']); ?>"
-                                                            data-rate="<?php echo htmlspecialchars($labor['hourly_rate']); ?>">
-                                                        <?php echo htmlspecialchars($labor['position_name']); ?> - 
+                                                            data-rate="<?php echo htmlspecialchars($labor['hourly_rate']); ?>">                                                        <?php echo htmlspecialchars($labor['position_name']); ?> - 
                                                         Rp <?php echo number_format($labor['hourly_rate'], 0, ',', '.'); ?>/jam
                                                     </option>
                                                 <?php endforeach;
@@ -854,8 +885,20 @@ try {
                                             <option value="">-- Pilih Bahan Baku --</option>
                                             <?php foreach ($rawMaterialsAndPackaging as $item): ?>
                                                 <?php if ($item['type'] == 'bahan'): ?>
-                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>">
-                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    <?php 
+                                                        $stokTerakhir = $item['stok_terakhir'];
+                                                        $isDisabled = $stokTerakhir <= 0;
+                                                        $stockLabel = '';
+                                                        if ($stokTerakhir <= 0) {
+                                                            $stockLabel = ' [STOK HABIS]';
+                                                        } elseif ($stokTerakhir <= 5) {
+                                                            $stockLabel = ' [STOK RENDAH: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        } else {
+                                                            $stockLabel = ' [Stok: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        }
+                                                    ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" <?php echo $isDisabled ? 'disabled' : ''; ?>>
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?><?php echo $stockLabel; ?>
                                                     </option>
                                                 <?php endif; ?>
                                             <?php endforeach; ?>
@@ -869,8 +912,7 @@ try {
                                         </div>
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-2">Satuan</label>
-                                            <select name="unit_measurement" id="edit_unit_measurement" class="w-full px-3 py-2 border border-gray-300 rounded```python
-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                            <select name="unit_measurement" id="edit_unit_measurement" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                                                 <?php foreach ($recipeUnitOptions as $unit): ?>
                                                     <option value="<?php echo htmlspecialchars($unit); ?>"><?php echo htmlspecialchars($unit); ?></option>
                                                 <?php endforeach; ?>
@@ -889,8 +931,20 @@ md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                                             <option value="">-- Pilih Kemasan --</option>
                                             <?php foreach ($rawMaterialsAndPackaging as $item): ?>
                                                 <?php if ($item['type'] == 'kemasan'): ?>
-                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>">
-                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
+                                                    <?php 
+                                                        $stokTerakhir = $item['stok_terakhir'];
+                                                        $isDisabled = $stokTerakhir <= 0;
+                                                        $stockLabel = '';
+                                                        if ($stokTerakhir <= 0) {
+                                                            $stockLabel = ' [STOK HABIS]';
+                                                        } elseif ($stokTerakhir <= 5) {
+                                                            $stockLabel = ' [STOK RENDAH: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        } else {
+                                                            $stockLabel = ' [Stok: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                                        }
+                                                    ?>
+                                                    <option value="<?php echo htmlspecialchars($item['id']); ?>" <?php echo $isDisabled ? 'disabled' : ''; ?>>
+                                                        <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?><?php echo $stockLabel; ?>
                                                     </option>
                                                 <?php endif; ?>
                                             <?php endforeach; ?>
@@ -1131,9 +1185,21 @@ md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                         <select name="raw_material_id" id="edit_raw_material_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                             <option value="">-- Pilih Bahan/Kemasan --</option>
                             <?php foreach ($rawMaterialsAndPackaging as $item): ?>
-                                <option value="<?php echo htmlspecialchars($item['id']); ?>">
+                                <?php 
+                                    $stokTerakhir = $item['stok_terakhir'];
+                                    $isDisabled = $stokTerakhir <= 0;
+                                    $stockLabel = '';
+                                    if ($stokTerakhir <= 0) {
+                                        $stockLabel = ' [STOK HABIS]';
+                                    } elseif ($stokTerakhir <= 5) {
+                                        $stockLabel = ' [STOK RENDAH: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                    } else {
+                                        $stockLabel = ' [Stok: ' . number_format($stokTerakhir) . ' ' . $item['unit'] . ']';
+                                    }
+                                ?>
+                                <option value="<?php echo htmlspecialchars($item['id']); ?>" <?php echo $isDisabled ? 'disabled' : ''; ?>>
                                     <?php echo htmlspecialchars($item['name']); ?><?php echo $item['brand'] ? ' - ' . htmlspecialchars($item['brand']) : ''; ?>
-                                    (<?php echo ucfirst($item['type']); ?>)
+                                    (<?php echo ucfirst($item['type']); ?>)<?php echo $stockLabel; ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>

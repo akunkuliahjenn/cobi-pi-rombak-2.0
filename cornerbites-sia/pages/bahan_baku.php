@@ -293,7 +293,7 @@ try {
     }
 
     // Query untuk mengambil bahan baku dengan informasi penggunaan
-    $queryRaw = "SELECT rm.id, rm.name, rm.brand, rm.unit, rm.purchase_price_per_unit, rm.default_package_quantity, rm.current_stock, rm.type,
+    $queryRaw = "SELECT rm.id, rm.name, rm.brand, rm.unit, rm.purchase_price_per_unit, rm.default_package_quantity, rm.current_stock, rm.type, rm.minimum_stock,
                  COALESCE(SUM(pr.quantity_used), 0) as total_used
                  FROM raw_materials rm
                  LEFT JOIN product_recipes pr ON rm.id = pr.raw_material_id
@@ -314,7 +314,8 @@ try {
 
     // Cek stok rendah untuk bahan baku
     foreach ($rawMaterials as $material) {
-        if ($material['current_stock'] <= 5) {
+        $minimumStock = $material['minimum_stock'] ?? 5; // Fallback ke 5 jika null
+        if ($material['current_stock'] <= $minimumStock) {
             $lowStockRaw[] = $material['name'];
         }
     }
@@ -573,16 +574,18 @@ function buildPaginationUrl($baseUrl, $paramsToUpdate) {
                                             </div>
                                             <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Bahan</span>
                                         </div>
-                                        <?php if ($material['current_stock'] <= 5): ?>
-                                            <div class="bg-orange-100 border border-orange-200 rounded-md p-2 mb-3">
-                                                <p class="text-xs text-orange-800 font-medium flex items-center">
-                                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92z" clip-rule="evenodd"></path>
-                                                    </svg>
-                                                    Stok Rendah - Perlu Restock
-                                                </p>
-                                            </div>
-                                        <?php endif; ?>
+                                        <?php 
+                        $minimumStock = $material['minimum_stock'] ?? 5;
+                        if ($material['current_stock'] <= $minimumStock): ?>
+                            <div class="bg-orange-100 border border-orange-200 rounded-md p-2 mb-3">
+                                <p class="text-xs text-orange-800 font-medium flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Stok Rendah - Perlu Restock
+                                </p>
+                            </div>
+                        <?php endif; ?>
                                         <div class="text-sm text-gray-600 space-y-2">
                                             <div class="flex justify-between">
                                                 <span>Harga:</span>
@@ -759,7 +762,7 @@ function buildPaginationUrl($baseUrl, $paramsToUpdate) {
                                                 <span class="<?php echo $material['current_stock'] <= 5 ? 'text-red-600' : 'text-green-600'; ?> font-medium">
                                                     <?php echo number_format($material['current_stock']); ?> <?php echo htmlspecialchars($material['unit']); ?>
                                                 </span>
-                                            </div>
+                               The code is further modified to apply the minimum stock check to packaging materials as well.                                            </div>
                                             <div class="flex justify-between">
                                                 <span>Total Digunakan dalam Resep:</span>
                                                 <span class="text-purple-600"><?php echo number_format($material['total_used'], ($material['total_used'] == floor($material['total_used'])) ? 0 : 1, ',', '.'); ?> <?php echo htmlspecialchars($material['unit']); ?></span>
@@ -915,7 +918,7 @@ function buildPaginationUrl($baseUrl, $paramsToUpdate) {
 
         kemasanLimitSelect.addEventListener('change', function() {
             performSearch('kemasan');
-        });
+        });`
     });
 </script>
 

@@ -32,6 +32,35 @@ try {
                     throw new Exception('Bahan ini sudah ada dalam resep. Silakan edit yang sudah ada.');
                 }
 
+                // Check stock availability - hitung stok terakhir yang sesungguhnya
+                $stockStmt = $conn->prepare("
+                    SELECT rm.name, rm.current_stock, rm.type, 
+                           COALESCE(SUM(pr.quantity_used), 0) as total_used_all_products
+                    FROM raw_materials rm
+                    LEFT JOIN product_recipes pr ON rm.id = pr.raw_material_id
+                    WHERE rm.id = ?
+                    GROUP BY rm.id
+                ");
+                $stockStmt->execute([$raw_material_id]);
+                $material = $stockStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$material) {
+                    throw new Exception('Bahan/kemasan tidak ditemukan');
+                }
+
+                // Hitung stok terakhir (stok fisik - total digunakan di semua resep)
+                $stokTerakhir = $material['current_stock'] - $material['total_used_all_products'];
+
+                if ($stokTerakhir <= 0) {
+                    $materialType = $material['type'] === 'bahan' ? 'bahan baku' : 'kemasan';
+                    throw new Exception('Stok terakhir ' . $materialType . ' "' . $material['name'] . '" sudah habis (Stok fisik: ' . number_format($material['current_stock']) . ', Digunakan: ' . number_format($material['total_used_all_products']) . '). Silakan tambah stok terlebih dahulu di halaman Bahan Baku & Kemasan.');
+                }
+
+                if ($stokTerakhir < $quantity_used) {
+                    $materialType = $material['type'] === 'bahan' ? 'bahan baku' : 'kemasan';
+                    throw new Exception('Stok terakhir ' . $materialType . ' "' . $material['name'] . '" tidak mencukupi. Stok terakhir tersedia: ' . number_format($stokTerakhir) . ', dibutuhkan: ' . number_format($quantity_used) . '. Silakan kurangi jumlah atau tambah stok terlebih dahulu.');
+                }
+
                 $stmt = $conn->prepare("INSERT INTO product_recipes (product_id, raw_material_id, quantity_used, unit_measurement) VALUES (?, ?, ?, ?)");
                 $stmt->execute([$product_id, $raw_material_id, $quantity_used, $unit_measurement]);
 
@@ -48,11 +77,68 @@ try {
                 $unit_measurement = $_POST['unit_measurement'] ?? null;
 
                 if (!$recipe_id || !$raw_material_id || !$quantity_used || !$unit_measurement) {
-                    throw new Exception('Data tidak lengkap');
+                    throw new Exception('Data tidak lengkap untuk update. Recipe ID: ' . $recipe_id . ', Material ID: ' . $raw_material_id);
+                }
+
+                // Get current recipe data to check if material is being changed
+                $currentStmt = $conn->prepare("SELECT raw_material_id, quantity_used FROM product_recipes WHERE id = ? AND product_id = ?");
+                $currentStmt->execute([$recipe_id, $product_id]);
+                $currentRecipe = $currentStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$currentRecipe) {
+                    throw new Exception('Data resep tidak ditemukan');
+                }
+
+                // Only check for duplicate if the material is being changed
+                if ($currentRecipe['raw_material_id'] != $raw_material_id) {
+                    $checkStmt = $conn->prepare("SELECT id FROM product_recipes WHERE product_id = ? AND raw_material_id = ? AND id != ?");
+                    $checkStmt->execute([$product_id, $raw_material_id, $recipe_id]);
+
+                    if ($checkStmt->fetch()) {
+                        throw new Exception('Bahan ini sudah ada dalam resep. Silakan pilih bahan yang berbeda.');
+                    }
+                }
+
+                // Check stock availability for edit - hitung stok terakhir yang sesungguhnya
+                $stockStmt = $conn->prepare("
+                    SELECT rm.name, rm.current_stock, rm.type, 
+                           COALESCE(SUM(pr.quantity_used), 0) as total_used_all_products
+                    FROM raw_materials rm
+                    LEFT JOIN product_recipes pr ON rm.id = pr.raw_material_id
+                    WHERE rm.id = ?
+                    GROUP BY rm.id
+                ");
+                $stockStmt->execute([$raw_material_id]);
+                $material = $stockStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$material) {
+                    throw new Exception('Bahan/kemasan tidak ditemukan');
+                }
+
+                // Hitung stok terakhir dan adjust jika material yang sama sedang diedit
+                $stokTerakhir = $material['current_stock'] - $material['total_used_all_products'];
+                
+                // Jika material yang sama, tambahkan kembali quantity yang sedang digunakan di resep ini
+                if ($currentRecipe['raw_material_id'] == $raw_material_id) {
+                    $stokTerakhir += $currentRecipe['quantity_used'];
+                }
+
+                if ($stokTerakhir <= 0) {
+                    $materialType = $material['type'] === 'bahan' ? 'bahan baku' : 'kemasan';
+                    throw new Exception('Stok terakhir ' . $materialType . ' "' . $material['name'] . '" sudah habis (Stok fisik: ' . number_format($material['current_stock']) . ', Digunakan: ' . number_format($material['total_used_all_products']) . '). Silakan tambah stok terlebih dahulu di halaman Bahan Baku & Kemasan.');
+                }
+
+                if ($stokTerakhir < $quantity_used) {
+                    $materialType = $material['type'] === 'bahan' ? 'bahan baku' : 'kemasan';
+                    throw new Exception('Stok terakhir ' . $materialType . ' "' . $material['name'] . '" tidak mencukupi. Stok terakhir tersedia: ' . number_format($stokTerakhir) . ', dibutuhkan: ' . number_format($quantity_used) . '. Silakan kurangi jumlah atau tambah stok terlebih dahulu.');
                 }
 
                 $stmt = $conn->prepare("UPDATE product_recipes SET raw_material_id = ?, quantity_used = ?, unit_measurement = ? WHERE id = ? AND product_id = ?");
                 $stmt->execute([$raw_material_id, $quantity_used, $unit_measurement, $recipe_id, $product_id]);
+
+                if ($stmt->rowCount() === 0) {
+                    throw new Exception('Tidak ada data yang diupdate. Silakan coba lagi.');
+                }
 
                 $_SESSION['resep_message'] = [
                     'text' => 'Item resep berhasil diupdate',
@@ -179,6 +265,38 @@ try {
 
                 $_SESSION['resep_message'] = [
                     'text' => 'Informasi produk berhasil diupdate',
+                    'type' => 'success'
+                ];
+                break;
+
+            case 'delete_manual_overhead':
+                $overhead_manual_id = $_POST['overhead_manual_id'] ?? null;
+
+                if (!$overhead_manual_id) {
+                    throw new Exception('ID overhead manual tidak ditemukan');
+                }
+
+                $stmt = $conn->prepare("DELETE FROM product_overhead_manual WHERE id = ? AND product_id = ?");
+                $stmt->execute([$overhead_manual_id, $product_id]);
+
+                $_SESSION['resep_message'] = [
+                    'text' => 'Overhead berhasil dihapus dari resep',
+                    'type' => 'success'
+                ];
+                break;
+
+            case 'delete_manual_labor':
+                $labor_manual_id = $_POST['labor_manual_id'] ?? null;
+
+                if (!$labor_manual_id) {
+                    throw new Exception('ID tenaga kerja manual tidak ditemukan');
+                }
+
+                $stmt = $conn->prepare("DELETE FROM product_labor_manual WHERE id = ? AND product_id = ?");
+                $stmt->execute([$labor_manual_id, $product_id]);
+
+                $_SESSION['resep_message'] = [
+                    'text' => 'Tenaga kerja berhasil dihapus dari resep',
                     'type' => 'success'
                 ];
                 break;
