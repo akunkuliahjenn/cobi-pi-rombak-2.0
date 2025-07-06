@@ -148,63 +148,64 @@ try {
                 ];
             }
 
-            // 2. BIAYA TENAGA KERJA - Ambil data upah dan waktu produksi
+            // 2. BIAYA TENAGA KERJA MANUAL - Hanya yang dipilih untuk produk ini
             $laborCostPerBatch = 0;
             $laborDetails = [];
-            $estimatedProductionTimeHours = $selectedProduct['production_time_hours'] ?? 1; // Default 1 jam jika belum diset
+            $estimatedProductionTimeHours = $selectedProduct['production_time_hours'] ?? 1;
 
-            $stmtLaborCosts = $conn->query("SELECT position_name, hourly_rate FROM labor_costs WHERE is_active = 1 ORDER BY position_name ASC");
-            $laborCosts = $stmtLaborCosts->fetchAll(PDO::FETCH_ASSOC);
+            // Ambil tenaga kerja manual yang sudah dipilih untuk produk ini
+            $stmtManualLabor = $conn->prepare("
+                SELECT plm.*, lc.position_name, lc.hourly_rate as default_hourly_rate
+                FROM product_labor_manual plm
+                JOIN labor_costs lc ON plm.labor_id = lc.id
+                WHERE plm.product_id = ? AND lc.is_active = 1
+                ORDER BY lc.position_name ASC
+            ");
+            $stmtManualLabor->execute([$selectedProductId]);
+            $manualLaborCosts = $stmtManualLabor->fetchAll(PDO::FETCH_ASSOC);
 
-            foreach ($laborCosts as $labor) {
-                $laborCostPerPosition = $labor['hourly_rate'] * $estimatedProductionTimeHours;
-                $laborCostPerBatch += $laborCostPerPosition;
+            foreach ($manualLaborCosts as $labor) {
+                $laborCostPerBatch += $labor['total_cost'];
 
                 $laborDetails[] = [
                     'name' => $labor['position_name'],
                     'type' => 'tenaga_kerja',
-                    'hourly_rate' => $labor['hourly_rate'],
-                    'production_time' => $estimatedProductionTimeHours,
-                    'cost_per_item' => $laborCostPerPosition,
-                    'category' => 'tenaga_kerja'
+                    'hourly_rate' => $labor['custom_hourly_rate'] ?? $labor['default_hourly_rate'],
+                    'production_time' => $labor['custom_hours'] ?? $estimatedProductionTimeHours,
+                    'cost_per_item' => $labor['total_cost'],
+                    'category' => 'tenaga_kerja',
+                    'manual_id' => $labor['id']
                 ];
             }
 
-            // 3. BIAYA OVERHEAD - Ambil data overhead dan alokasi
+            // 3. BIAYA OVERHEAD MANUAL - Hanya yang dipilih untuk produk ini
             $overheadCostPerBatch = 0;
             $overheadDetails = [];
             $productionYield = $selectedProduct['production_yield'] ?? 1;
 
-            $stmtOverheadCosts = $conn->query("SELECT name, amount, allocation_method, description FROM overhead_costs WHERE is_active = 1 ORDER BY name ASC");
-            $overheadCosts = $stmtOverheadCosts->fetchAll(PDO::FETCH_ASSOC);
+            // Ambil overhead manual yang sudah dipilih untuk produk ini
+            $stmtManualOverhead = $conn->prepare("
+                SELECT pom.*, oc.name, oc.description, oc.allocation_method, oc.amount as default_amount
+                FROM product_overhead_manual pom
+                JOIN overhead_costs oc ON pom.overhead_id = oc.id
+                WHERE pom.product_id = ? AND oc.is_active = 1
+                ORDER BY oc.name ASC
+            ");
+            $stmtManualOverhead->execute([$selectedProductId]);
+            $manualOverheadCosts = $stmtManualOverhead->fetchAll(PDO::FETCH_ASSOC);
 
-            foreach ($overheadCosts as $overhead) {
-                $overheadCostPerItem = 0;
-
-                switch ($overhead['allocation_method']) {
-                    case 'per_unit':
-                        $overheadCostPerItem = $overhead['amount'] * $productionYield;
-                        break;
-                    case 'per_hour':
-                        $overheadCostPerItem = $overhead['amount'] * $estimatedProductionTimeHours;
-                        break;
-                    case 'percentage':
-                    default:
-                        // Asumsi percentage dari total biaya bahan baku
-                        $overheadCostPerItem = ($overhead['amount'] / 100) * $totalCostPerBatch;
-                        break;
-                }
-
-                $overheadCostPerBatch += $overheadCostPerItem;
+            foreach ($manualOverheadCosts as $overhead) {
+                $overheadCostPerBatch += $overhead['final_amount'];
 
                 $overheadDetails[] = [
                     'name' => $overhead['name'],
                     'type' => 'overhead',
-                    'amount' => $overhead['amount'],
+                    'amount' => $overhead['custom_amount'] ?? $overhead['default_amount'],
                     'allocation_method' => $overhead['allocation_method'],
                     'description' => $overhead['description'],
-                    'cost_per_item' => $overheadCostPerItem,
-                    'category' => 'overhead'
+                    'cost_per_item' => $overhead['final_amount'],
+                    'category' => 'overhead',
+                    'manual_id' => $overhead['id']
                 ];
             }
 
@@ -438,7 +439,7 @@ try {
                                     </div>
                                 </div>
 
-                                <div class="bg-<?php echo $hppCalculation['profit_per_unit'] >= 0 ? 'green' : 'red'; ?>-50 border border-<?php echo $hppCalculation['profit_per_unit'] >= 0 ? 'green' : 'red'; ?>-200 rounded-lg p-4">
+                                                               <div class="bg-<?php echo $hppCalculation['profit_per_unit'] >= 0 ? 'green' : 'red'; ?>-50 border border-<?php echo $hppCalculation['profit_per_unit'] >= 0 ? 'green' : 'red'; ?>-200 rounded-lg p-4">
                                     <div class="flex items-center">
                                         <div class="p-2 bg-<?php echo $hppCalculation['profit_per_unit'] >= 0 ? 'green' : 'red'; ?>-100 rounded-lg mr-3">
                                             <svg class="w-5 h-5 text-<?php echo $hppCalculation['profit_per_unit'] >= 0 ? 'green' : 'red'; ?>-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -497,12 +498,15 @@ try {
 
                                 <!-- Tab Content Tenaga Kerja -->
                                 <div id="content-tenaga_kerja" class="p-6 hidden">
-                                    <h4 class="font-bold text-gray-800 mb-4 flex items-center">
-                                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                        </svg>
-                                        Detail Biaya Tenaga Kerja:
-                                    </h4>
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h4 class="font-bold text-gray-800 flex items-center">
+                                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                            </svg>
+                                            Detail Biaya Tenaga Kerja:
+                                        </h4>
+                                        <span class="text-sm text-gray-500">Hanya yang dipilih untuk produk ini</span>
+                                    </div>
                                     <?php if (!empty($hppCalculation['labor_details'])): ?>
                                         <div class="space-y-3">
                                             <?php foreach ($hppCalculation['labor_details'] as $detail): ?>
@@ -515,27 +519,39 @@ try {
                                                             Rp <?php echo number_format($detail['hourly_rate'], 0, ',', '.'); ?>/jam × <?php echo $detail['production_time']; ?> jam
                                                         </span>
                                                     </div>
-                                                    <div class="flex-1 text-right">
+                                                    <div class="flex-1 text-right flex items-center justify-end space-x-2">
                                                         <span class="font-semibold text-gray-900">Rp <?php echo number_format($detail['cost_per_item'], 0, ',', '.'); ?></span>
+                                                        <button onclick="deleteManualLabor(<?php echo $detail['manual_id'] ?? 0; ?>)" class="text-red-600 hover:text-red-800" title="Hapus dari resep">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                            </svg>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php else: ?>
                                         <div class="text-center py-8">
-                                            <p class="text-gray-500">Belum ada data upah tenaga kerja. <a href="overhead_management.php" class="text-blue-600 hover:underline">Tambahkan di sini</a></p>
+                                            <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                            </svg>
+                                            <p class="text-gray-500 font-medium">Belum ada tenaga kerja yang dipilih</p>
+                                            <p class="text-gray-400 text-sm mt-1">Gunakan form "Input Manual Overhead & Tenaga Kerja" di bawah untuk menambahkan</p>
                                         </div>
                                     <?php endif; ?>
                                 </div>
 
                                 <!-- Tab Content Overhead -->
                                 <div id="content-overhead" class="p-6 hidden">
-                                    <h4 class="font-bold text-gray-800 mb-4 flex items-center">
-                                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                                        </svg>
-                                        Detail Biaya Overhead:
-                                    </h4>
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h4 class="font-bold text-gray-800 flex items-center">
+                                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                            </svg>
+                                            Detail Biaya Overhead:
+                                        </h4>
+                                        <span class="text-sm text-gray-500">Hanya yang dipilih untuk produk ini</span>
+                                    </div>
                                     <?php if (!empty($hppCalculation['overhead_details'])): ?>
                                         <div class="space-y-3">
                                             <?php foreach ($hppCalculation['overhead_details'] as $detail): ?>
@@ -553,15 +569,24 @@ try {
                                                             <?php echo $detail['allocation_method'] == 'percentage' ? '%' : ($detail['allocation_method'] == 'per_hour' ? '/jam' : '/unit'); ?>
                                                         </span>
                                                     </div>
-                                                    <div class="flex-1 text-right">
+                                                    <div class="flex-1 text-right flex items-center justify-end space-x-2">
                                                         <span class="font-semibold text-gray-900">Rp <?php echo number_format($detail['cost_per_item'], 0, ',', '.'); ?></span>
+                                                        <button onclick="deleteManualOverhead(<?php echo $detail['manual_id'] ?? 0; ?>)" class="text-red-600 hover:text-red-800" title="Hapus dari resep">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                            </svg>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php else: ?>
                                         <div class="text-center py-8">
-                                            <p class="text-gray-500">Belum ada data biaya overhead. <a href="overhead_management.php" class="text-blue-600 hover:underline">Tambahkan di sini</a></p>
+                                            <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                            </svg>
+                                            <p class="text-gray-500 font-medium">Belum ada overhead yang dipilih</p>
+                                            <p class="text-gray-400 text-sm mt-1">Gunakan form "Input Manual Overhead & Tenaga Kerja" di bawah untuk menambahkan</p>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -778,7 +803,7 @@ try {
                             <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                                 <div class="flex">
                                     <svg class="w-5 h-5 text-blue-400 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
                                     <div>
                                         <h4 class="text-sm font-medium text-blue-800">Catatan Penting</h4>

@@ -1,4 +1,3 @@
-
 <?php
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
@@ -44,7 +43,7 @@ try {
     error_log("Error di Analisis HPP: " . $e->getMessage());
 }
 
-function calculateCompleteHPP($conn, $product, $overhead_costs, $labor_costs, $monthly_production = 1000) {
+function calculateCompleteHPP($conn, $product, $overhead_costs, $labor_costs) {
     $calculation = [
         'biaya_bahan_baku' => 0,
         'biaya_tenaga_kerja' => 0,
@@ -96,7 +95,7 @@ function calculateCompleteHPP($conn, $product, $overhead_costs, $labor_costs, $m
         $total_overhead_bulanan += $overhead['amount'];
     }
     
-    $overhead_per_unit = $monthly_production > 0 ? $total_overhead_bulanan / $monthly_production : 0;
+    $overhead_per_unit = 0; // Remove the monthly production dependency, no division
     $calculation['biaya_overhead'] = $overhead_per_unit;
     
     // 4. TOTAL HPP PER UNIT
@@ -200,7 +199,7 @@ if (isset($_SESSION['analisis_message'])) {
                         <div class="flex items-center">
                             <div class="p-3 bg-yellow-100 rounded-lg mr-4">
                                 <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-.118l-3.976-2.888c-.784-.57-.38-1.81.588-.181h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
                                 </svg>
                             </div>
                             <div>
